@@ -18,14 +18,4 @@ services:
     ports:
       - "80:80"
     depends_on:
-      - flask_app    
-  
-  db:
-    image: postgres:10
-    env_file: .env
-    expose:
-      - 5432
-    volumes:
-      - ./postgres_data:/var/lib/postgresql/data
-    depends_on:
-      - flask_app  
+      - flask_app
