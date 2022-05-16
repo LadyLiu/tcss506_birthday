@@ -1,18 +1,36 @@
 """
 Stephanie Liu
 Requirements:
-DONE 1) Test user: lhhung@uw.edu qwerty
-DONE 2) User logs in to a dashboard / landing page
-DONE 3) Dashboard contains form to enter date and maximum number of results.
-    Date verified with flask_wtf, max entries between 1-20.
-DONE 4) Validated data queries wiki api to get birthdays shared by famous people.
-    Sorted by closeness to entry year of birth.
-    Thumbnail, name, birth year returned in table.
-DONE 5) Navigation bar, disables landing page unless accessed by login.
-DONE 6) App must run in docker container.
-DONE 7) Submit working URL for app deployed to cloud.
-DONE Å8) Github repo with all necessary files.
-DONE 9) When URL browsed, should redirect to login, then to registration page.
+The login fields:
+DONE - Username and password.
+DONE - Submit button and a link to optionally register which redirects to the registration page.
+DONE - Login redirects to dashboard.  Dashboard inaccessible without login.
+DONE - Login failed message.
+
+DONE - Username should be at least 6 characters and no more than 20 characters.
+DONE - Passwords should be at least 8 characters. (I maxed at 16)
+
+The registration page should have:
+DONE username
+DONE email
+DONE password
+DONE register button.
+DONE user should be redirected to the login page (also added redirects to home if registered with sign in info)
+
+DONE - User logout.
+
+DONE - Username, password and email should be put into a database, password should be encrypted.
+
+Deployed in production mode with gunicorn in the same container as flask, and nginx in a separate container.
+A docker-compose file should be used to orchestrate the deployment.
+
+You should submit a working url for your assignment app which is deployed to the cloud.
+When I browse your url with no endpoint, it should redirect me to the login page and then to the registration page.
+
+You should have a github repo with all the necessary files (including  Dockerfiles for all the containers).
+
+You don’t need to push the containers to DockerHub though you can if you want and it makes it easier for me to figure
+out where you went wrong if you have problems.
 """
 
 from flask import Flask, render_template, request, redirect, flash
@@ -25,8 +43,8 @@ import wiki
 
 
 class EmailPassForm(FlaskForm):
-    email = StringField(label="Enter email", validators=[DataRequired(), Email()])
-    password = PasswordField(label="Enter password", validators=[DataRequired(), Length(min=6, max=16)])
+    username = StringField(label="Enter username", validators=[DataRequired(), Length(min=6, max=20)])
+    password = PasswordField(label="Enter password", validators=[DataRequired(), Length(min=8, max=16)])
 
 
 class LoginForm(EmailPassForm):
@@ -34,6 +52,7 @@ class LoginForm(EmailPassForm):
 
 
 class RegisterForm(EmailPassForm):
+    email = StringField(label="Enter email", validators=[DataRequired(), Email()])
     submit = SubmitField(label="Register")
 
 
@@ -72,10 +91,11 @@ def redirect_to_login():
     return redirect("/login")
 
 
-def add_user(email, password):
+def add_user(username, email, password):
     # check if email or username exits
     user = UserModel()
     user.set_password(password)
+    user.username = username
     user.email = email
     db.session.add(user)
     db.session.commit()
@@ -87,9 +107,9 @@ def create_table():
     Creates database if it doesn't already exist including a default user.
     """
     db.create_all()
-    user = UserModel.query.filter_by(email="lhhung@uw.edu").first()
-    if user is None:
-        add_user("lhhung@uw.edu", "qwerty")
+    # user = UserModel.query.filter_by(email="lhhung@uw.edu").first()
+    # if user is None:
+    #     add_user("lhhung@uw.edu", "qwerty")
 
 
 @app.route("/login", methods=['GET', 'POST'])
@@ -97,12 +117,14 @@ def login():
     form = LoginForm()
     if form.validate_on_submit():
         if request.method == "POST":
-            email = request.form["email"]
+            username = request.form["username"]
             password = request.form["password"]
-            user = UserModel.query.filter_by(email=email).first()
+            user = UserModel.query.filter_by(username=username).first()
             if user is not None and user.check_password(password):
                 login_user(user)
                 return redirect('/home')
+            else:
+                flash("Login attempt failed. Please check username and password, then try again.")
     return render_template("login.html", form=form)
 
 
@@ -112,18 +134,25 @@ def register():
     if form.validate_on_submit():
         if request.method == "POST":
             email = request.form["email"]
+            username = request.form["username"]
             password = request.form["password"]
-            user = UserModel.query.filter_by(email=email).first()
-            if user is None:
-                add_user(email, password)
+            user_email = UserModel.query.filter_by(email=email).first()
+            user_name = UserModel.query.filter_by(username=username).first()
+            if user_email is None and user_name is None:
+                add_user(username=username, email=email, password=password)
                 flash("Thank you for registering!")
                 return redirect('/login')
-            elif user is not None and user.check_password(password):
-                flash("Welcome back!")
-                login_user(user)
+            elif user_name is not None and user_name.check_password(password):
+                flash("Welcome back!  Your account is already registered.")
+                login_user(user_name)
                 return redirect('/home')
+            elif user_name is not None and user_email is None:
+                flash("Username is already taken.  Please choose another one.")
+            elif user_email is not None:
+                flash("Email is already registered, please check your user name or password and try signing in.")
+                return redirect('/login')
             else:
-                flash("User already exists and you used an incorrect password.")
+                flash("Please try another username or email address, as these are already registered.")
     return render_template("register.html", form=form)
 
 
